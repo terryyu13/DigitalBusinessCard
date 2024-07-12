@@ -1,6 +1,12 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 void main() {
   runApp(DigitalBusinessCardApp());
@@ -34,6 +40,7 @@ class _BusinessCardPageState extends State<BusinessCardPage> {
   Uint8List? imageForSendToAPI;
 
   final ImagePicker _imagePicker = ImagePicker();
+  final GlobalKey _cardKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -118,13 +125,17 @@ class _BusinessCardPageState extends State<BusinessCardPage> {
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  showCard = true; // 顯示名片
+                  showCard = true;
                 });
               },
               child: Text('Save'),
             ),
             SizedBox(height: 20),
-            // 如果 showCard 為 true，則顯示名片
+            ElevatedButton(
+              onPressed: _exportBusinessCard,
+              child: Text('Export Business Card'),
+            ),
+            SizedBox(height: 20),
             if (showCard) _buildBusinessCard(),
           ],
         ),
@@ -133,63 +144,66 @@ class _BusinessCardPageState extends State<BusinessCardPage> {
   }
 
   Widget _buildBusinessCard() {
-    return Card(
-      margin: EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (imageForSendToAPI != null)
-              Center(
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundImage: MemoryImage(imageForSendToAPI!),
+    return RepaintBoundary(
+      key: _cardKey,
+      child: Card(
+        margin: EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (imageForSendToAPI != null)
+                Center(
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundImage: MemoryImage(imageForSendToAPI!),
+                  ),
+                ),
+              if (imageForSendToAPI == null)
+                Center(
+                  child: CircleAvatar(
+                    radius: 50,
+                    child: Icon(Icons.person, size: 50),
+                  ),
+                ),
+              ListTile(
+                leading: Icon(Icons.person),
+                title: Text(
+                  'Name: $name',
+                  style: TextStyle(fontSize: 18),
                 ),
               ),
-            if (imageForSendToAPI == null)
-              Center(
-                child: CircleAvatar(
-                  radius: 50,
-                  child: Icon(Icons.person, size: 50),
+              ListTile(
+                leading: Icon(Icons.work),
+                title: Text(
+                  'Job Title: $jobTitle',
+                  style: TextStyle(fontSize: 18),
                 ),
               ),
-            ListTile(
-              leading: Icon(Icons.person),
-              title: Text(
-                'Name: $name',
-                style: TextStyle(fontSize: 18),
+              ListTile(
+                leading: Icon(Icons.phone),
+                title: Text(
+                  'Phone: $phoneNumber',
+                  style: TextStyle(fontSize: 18),
+                ),
               ),
-            ),
-            ListTile(
-              leading: Icon(Icons.work),
-              title: Text(
-                'Job Title: $jobTitle',
-                style: TextStyle(fontSize: 18),
+              ListTile(
+                leading: Icon(Icons.email),
+                title: Text(
+                  'Email: $emailAddress',
+                  style: TextStyle(fontSize: 18),
+                ),
               ),
-            ),
-            ListTile(
-              leading: Icon(Icons.phone),
-              title: Text(
-                'Phone: $phoneNumber',
-                style: TextStyle(fontSize: 18),
+              ListTile(
+                leading: Icon(Icons.location_on),
+                title: Text(
+                  'Location: $location',
+                  style: TextStyle(fontSize: 18),
+                ),
               ),
-            ),
-            ListTile(
-              leading: Icon(Icons.email),
-              title: Text(
-                'Email: $emailAddress',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-            ListTile(
-              leading: Icon(Icons.location_on),
-              title: Text(
-                'Location: $location',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -205,6 +219,50 @@ class _BusinessCardPageState extends State<BusinessCardPage> {
       setState(() {
         imageForSendToAPI = temp;
       });
+    }
+  }
+
+  Future<void> _exportBusinessCard() async {
+    try {
+      // Step 1: Create a `RenderRepaintBoundary` to capture the card as an image.
+      RenderRepaintBoundary boundary =
+          _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+      // Step 2: Get the external storage directory.
+      Directory? directory = await getExternalStorageDirectory();
+      if (directory == null) {
+        throw FileSystemException('Failed to get external storage directory.');
+      }
+
+      // Step 3: Save the image to the external storage.
+      String fileName =
+          "business_card_${DateTime.now().millisecondsSinceEpoch}.png";
+      String filePath = '${directory.path}/$fileName';
+      File file = File(filePath);
+      await file.writeAsBytes(pngBytes);
+
+      // Step 4: Show a snackbar to indicate success and allow opening the file.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Business card exported successfully!'),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () {
+              OpenFile.open(filePath);
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      // Handle errors here.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to export business card: $e'),
+        ),
+      );
     }
   }
 }
