@@ -1,6 +1,6 @@
 # digital_business_card
 
-A new Flutter project.
+This is a digital business card application created as a practice project using Flutter.
 
 ## Getting Started
 
